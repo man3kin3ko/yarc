@@ -14,8 +14,8 @@ pipx install --include-deps ansible
 ## Installation
 
 ```
-git clone ...
-# fill api keys
+git clone https://git.t00x.com/rxzy/yarc
+nano yarc/api-keys.yml
 ```
 
 
@@ -31,6 +31,9 @@ PLAY [Recon via a given TLD] *********************
 
 - [] community.general.pipx
 - [] ip & asn enum
+- [] cut-cdn
+- [] hakcsp
+- [] web recon
 - [] parse ANY
 - [] notify in handlers
 - [] nmap scan ?

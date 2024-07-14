@@ -1,0 +1,86 @@
+---
+- name: Setup recon tools
+  hosts: localhost
+  vars:
+    go_tools:
+      - github.com/tomnomnom/anew@latest
+      - github.com/tomnomnom/unfurl@latest
+      - github.com/tomnomnom/concurl@latest
+      - github.com/lc/gau/v2/cmd/gau@latest
+      - github.com/dwisiswant0/go-dork@latest
+      # - github.com/ImAyrix/cut-cdn@latest
+      - github.com/hakluke/hakfindinternaldomains@latest
+      - github.com/gwen001/github-subdomains@latest
+      # - github.com/hakluke/hakcsp@latest
+      - github.com/d3mondev/puredns/v2@latest
+      - github.com/pwnesia/dnstake/cmd/dnstake@latest
+    py_tools:
+      - bbot
+      - git+https://github.com/man3kin3ko/baddns
+  tasks:
+    - name: "Install packages"
+      when: ansible_facts.os_family != 'Archlinux'
+      ansible.builtin.package:
+        name:
+          - pipx
+          - golang
+        state: present
+      become: true
+      become_method: sudo
+
+    - name: I use Arch btw
+      when: ansible_facts.os_family == 'Archlinux'
+      community.general.pacman:
+        name:
+          - python-pipx
+          - go
+        state: present
+      become: true
+      become_method: sudo
+
+    - name: "Install Python tools" 
+      ansible.builtin.command: 
+        cmd: pipx install {{ item }}
+      with_items: "{{ py_tools }}"
+
+    - name: "Install massdns"
+      shell: git clone https://github.com/blechschmidt/massdns.git && cd massdns && make && make install
+      args:
+        executable: /bin/bash
+        creates: massdns
+      become: true
+      become_method: sudo
+    
+    - name: "Download resolvers list"
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/trickest/resolvers/main/resolvers-community.txt
+        dest: ./resolvers.txt
+    
+    - name: "Download subdomain dictionary"
+      ansible.builtin.get_url:
+        url: https://wordlists-cdn.assetnote.io/data/manual/best-dns-wordlist.txt
+        dest: ./dns-wordlist.txt
+
+    - name: "Setup Golang utils"
+      ansible.builtin.command: 
+        cmd: go install {{ item }}
+      become: true
+      become_method: sudo
+      environment:
+          GOPATH: "{{ lookup('ansible.builtin.env', 'GOPATH', default=ansible_facts.env.HOME + '/go') }}"
+      with_items: "{{ go_tools }}"
+
+    - name: Include API keys
+      ansible.builtin.include_vars:
+        file: api_keys.yml
+        name: keys
+
+    - name: Configure bbot
+      template:
+        src: secrets_bbot.j2
+        dest: "{{ ansible_facts.env.HOME }}/.config/bbot/secrets.yml"
+    
+    - name: Configure gau
+      template:
+        src: gau.toml.j2
+        dest: "{{ ansible_facts.env.HOME + '/go'}}/.gau.toml"

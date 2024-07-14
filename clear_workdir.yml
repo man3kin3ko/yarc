@@ -1,0 +1,36 @@
+---
+- name: Clear third party software file
+  ansible.builtin.file:
+    path: "{{ top_level_domain }}.txt"
+    state: absent
+
+- name: Find empty files
+  ansible.builtin.find:
+    paths: .
+    size: "-1"
+  register: files
+
+- name: Delete empty files
+  ansible.builtin.command:
+    cmd: "rm {{ item.path }}"
+  loop: "{{ files.files | selectattr('size', '==', 0) }}"
+
+- name: Create output directory
+  ansible.builtin.file:
+    path: "output-{{ansible_date_time.date}}-{{ansible_date_time.hour}}-{{ansible_date_time.minute}}"
+    state: directory
+  register: created_dir
+
+- name: Move useful output
+  ansible.builtin.command:
+    cmd: "mv {{item}} {{created_dir.path}}/"
+  loop:
+    - "{{ top_level_domain }}"
+    - google-dorks-urls
+    - archives-urls
+    - domains-inscope.txt
+    - domains-resolved.txt
+    - domains-unresolved.txt
+    - domains.txt
+    - baddns.txt
+  ignore_errors: true

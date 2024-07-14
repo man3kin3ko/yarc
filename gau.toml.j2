@@ -1,0 +1,19 @@
+threads = 5
+verbose = false
+retries = 5
+subdomains = true
+parameters = true
+providers = ["wayback","commoncrawl","otx","urlscan"]
+blacklist = ["ttf","woff","svg","png","jpg","woff2","ico","bmp","ttf","flv","webm","wmv","mkv","m4a","mp3","mp4","flac","css","gif","jpeg"]
+json = false
+
+[urlscan]
+  apikey = "{{ keys.URLSCAN_API_KEY }}"
+
+[filters]
+  from = ""
+  to = ""
+  matchstatuscodes = [200,500,301,302]
+  matchmimetypes = []
+  filterstatuscodes = []
+  filtermimetypes = ["image/png", "image/jpg", "image/svg+xml"]

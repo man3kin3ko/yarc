@@ -1,0 +1,112 @@
+#dig -t ANY +noall +answer {{ top_level_domain }} | grep -e "IN\s*A" 
+
+---
+- name: Setup tools
+  import_playbook: setup_tools.yml
+    
+- name: "Recon via a given TLD"
+  hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: top_level_domain
+      prompt: "Input TLD"
+      private: false
+      # + ip addresses -> just add to list and reverse search after stage
+      # + networks -> asn?
+  gather_facts: true
+  tasks:
+  - name: "Run bbot precheck"
+    ansible.builtin.command:
+      cmd: "bbot --silent -t {{ top_level_domain }} -f subdomain-enum -rf passive -om json -n {{ top_level_domain }} -y -o ."
+  
+  - name: "Parse bbot subdomains"
+    shell: cat {{ top_level_domain }}/output.ndjson | jq 'select((.type=="DNS_NAME") or (.type=="DNS_NAME_UNRESOLVED")) | .data' | tr -d '"' | sort | uniq > domains.txt
+    args: 
+      executable: /bin/bash 
+
+  - name: "Parse bbot ip addresses"
+    shell: cat output.ndjson | jq 'select(.type=="IP_ADDRESS") | .data' | tr -d '"' | sort | uniq > ip_addrs.txt
+    args: 
+      executable: /bin/bash 
+
+  - name: Dork Google for subdomains (100 first pages)
+    shell: go-dork -q "site:*.{{ top_level_domain }}" -p 100 -s| tee -i google-dorks-urls | unfurl domains | anew domains.txt
+    args:
+      executable: /bin/bash
+
+  - name: Dork Github for subdomains
+    shell: github-subdomains -d deiteriy.com -t {{ keys.GITHUB_API_KEY }} -raw -q | anew domains.txt
+    args:
+      executable: /bin/bash
+
+  # This part should be covered by baddns
+  
+  # - name: Register NS servers as variable
+  #   shell: dig -t NS +noall +answer {{ top_level_domain }} | awk '{ print $5 }' | sed -e 's/\.$//'
+  #   args:
+  #     executable: /bin/bash
+  #   register: ns_servers
+
+  # - name: Trying AXFR
+  # # can cause problems in pipe bc i dont know how a succesful result looks like :)
+  #   shell: dig -t AXFR +noall +answer {{ top_level_domain }} @{{ item }} | grep -v -e "Transfer failed" | anew axfr
+  #   args:
+  #     executable: /bin/bash
+  #   loop: "{{ ns_servers.stdout_lines }}"
+
+  - name: Searching archives and cache
+    shell: gau {{ top_level_domain }} | tee -i archives-urls | unfurl domains | anew domains.txt
+
+  - name: Check if TLD is a wildcard
+    shell: dig +noall +answer *.{{ top_level_domain }} | grep -e "IN\s*A"
+    args:
+      executable: /bin/bash
+    register: is_wildcard
+    ignore_errors: true
+  
+  - name: Brute subdomains
+    when: is_wildcard is failed
+    shell: puredns bruteforce dns-wordlist.txt {{ top_level_domain }} --resolvers resolvers.txt -q | anew domains.txt
+    args:
+      executable: /bin/bash
+
+  - name: Dig into SPF records for domains
+    shell: dig -t txt {{ top_level_domain }} | grep v=spf | python spf-parser.py | jq '.domains[]' | tr -d '"' | anew domains.txt
+    args:
+      executable: /bin/bash
+
+  - name: Dig into SPF records for IPs
+    shell: dig -t txt {{ top_level_domain }} | grep v=spf | python spf-parser.py | jq '.ip[]' | tr -d '"' | anew ip_addrs.txt
+    args:
+      executable: /bin/bash
+
+  - name: Remove outscope
+    shell: grep -e ".{{ top_level_domain }}$" domains.txt > domains-inscope.txt
+    args:
+      executable: /bin/bash
+
+  - name: Perform active steps for dangling records, AXFR, etc
+    shell: "baddns -s -m NS,NSEC,CNAME,zonetransfer,MX {{ item }} > baddns.txt"
+    args:
+      executable: /bin/bash
+    loop: "{{ lookup('file', 'domains-inscope.txt').splitlines() }}"
+
+  - name: Resolve domains
+    shell: puredns resolve domains-inscope.txt -q > domains-resolved.txt
+    args:
+      executable: /bin/bash
+  
+  - name: Extract unresolvable
+    shell: comm -23 <(sort < domains-inscope.txt) <(sort < domains-resolved.txt) > domains-unresolved.txt
+    args:
+      executable: /bin/bash
+
+  - name: Find internal domains
+    shell: cat domains-resolved.txt | hakfindinternaldomains | awk '{print $1}' > domains-internal.txt
+    args:
+      executable: /bin/bash
+  
+  - name: Clear workdir
+    include_tasks: clear_workdir.yml
+
+# external -> cdn/white

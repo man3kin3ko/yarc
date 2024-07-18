@@ -1,8 +1,4 @@
 ---
-- name: Clear third party software file
-  ansible.builtin.file:
-    path: "{{ top_level_domain }}.txt"
-    state: absent
 
 - name: Find empty files
   ansible.builtin.find:
@@ -14,6 +10,15 @@
   ansible.builtin.command:
     cmd: "rm {{ item.path }}"
   loop: "{{ files.files | selectattr('size', '==', 0) }}"
+
+- name: Delete Temporary files
+  ansible.builtin.command:
+    cmd: "rm {{ item }}"
+  loop:
+    - domains-resolved.txt
+    - domains.txt
+    - domains-unified.txt
+    - domains-inscope.txt
 
 - name: Create output directory
   ansible.builtin.file:
@@ -28,9 +33,10 @@
     - "{{ top_level_domain }}"
     - google-dorks-urls
     - archives-urls
-    - domains-inscope.txt
-    - domains-resolved.txt
     - domains-unresolved.txt
-    - domains.txt
     - baddns.txt
+    - wildcards.txt
+    - white-domains.txt
+    - cdn-domains.txt
+
   ignore_errors: true

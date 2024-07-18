@@ -14,8 +14,8 @@ pipx install --include-deps ansible
 ## Installation
 
 ```
-git clone https://git.t00x.com/rxzy/yarc
-nano yarc/api-keys.yml
+git clone ...
+# fill api keys
 ```
 
 
@@ -23,17 +23,17 @@ nano yarc/api-keys.yml
 ```
 ansible-playbook yet-another-recon-combine/playbook.yml #-vv
 
+PLAY [Setup recon tools] *******************
+
 Input TLD: deiteriy.com
-PLAY [Recon via a given TLD] *********************
+
+PLAY [Recon via a given TLD] ***************
 ```
 
 ## TODO
 
-- [] community.general.pipx
 - [] ip & asn enum
-- [] cut-cdn
-- [] hakcsp
-- [] web recon
 - [] parse ANY
 - [] notify in handlers
-- [] nmap scan ?
+- [] nmap scan -> improve default community.general.nmap
+- [] везде где есть треды устанавливать через переменную

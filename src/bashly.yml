@@ -1,0 +1,43 @@
+name: unify
+help: Creates flatten ip:hostname list for OSINT pipelining
+version: 0.1.0
+
+commands:
+- name: resolve
+  alias: res
+  help: Resolve hostnames into IP addresses
+
+  args:
+  - name: hostnames_list
+    required: true
+    help: Pipeline generated list of hostnames
+
+  flags:
+  - long: --mapfile
+    short: -m
+    help: Use mapfile instead of read (can cause compatibility issues, but generally faster)
+
+  examples:
+  - unify resolve domains-resolved.txt
+  - unify res -m domains-resolved.txt
+
+- name: reverse
+  alias: rev
+  help: Recon for possible hostnames for a given IP
+
+  args:
+  - name: ips_list
+    required: true
+    help: Pipeline generated list of IP addresses
+
+  - name: name_file
+    required: true
+    help: domain:ip list
+
+  flags:
+  - long: --mapfile
+    short: -m
+    help: Use mapfile instead of read (can cause compatibility issues, but generally faster)
+
+  examples:
+  - unify reverse -m white-ip.txt domains-unify.txt

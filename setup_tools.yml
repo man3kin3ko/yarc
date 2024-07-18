@@ -8,12 +8,15 @@
       - github.com/tomnomnom/concurl@latest
       - github.com/lc/gau/v2/cmd/gau@latest
       - github.com/dwisiswant0/go-dork@latest
-      # - github.com/ImAyrix/cut-cdn@latest
+      - github.com/ImAyrix/cut-cdn@latest
       - github.com/hakluke/hakfindinternaldomains@latest
       - github.com/gwen001/github-subdomains@latest
       # - github.com/hakluke/hakcsp@latest
       - github.com/d3mondev/puredns/v2@latest
       - github.com/pwnesia/dnstake/cmd/dnstake@latest
+      - github.com/imusabkhan/prips@latest
+      - github.com/hakluke/hakoriginfinder@latest
+      - github.com/hakluke/hakip2host@latest
     py_tools:
       - bbot
       - git+https://github.com/man3kin3ko/baddns
@@ -24,6 +27,7 @@
         name:
           - pipx
           - golang
+          - moreutils
         state: present
       become: true
       become_method: sudo
@@ -34,14 +38,25 @@
         name:
           - python-pipx
           - go
+          - moreutils
         state: present
       become: true
       become_method: sudo
 
     - name: "Install Python tools" 
-      ansible.builtin.command: 
-        cmd: pipx install {{ item }}
+      community.general.pipx: 
+        name: "{{ item }}"
+        state: present
       with_items: "{{ py_tools }}"
+
+    # - name: "Install Shodan CLI"
+    #   ansible.builtin.pip:
+    #     name: shodan
+    #     extra_args: "-U --user"
+
+    # - name: "Init shodan CLI"
+    #   ansible.builtin.command:
+    #     cmd: "shodan init {{ keys.SHODAN_API_KEY }}"
 
     - name: "Install massdns"
       shell: git clone https://github.com/blechschmidt/massdns.git && cd massdns && make && make install

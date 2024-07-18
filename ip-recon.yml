@@ -1,0 +1,23 @@
+---
+- name: Now lurk for info using IP addresses
+  hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: input_filled
+      prompt: "I want IP-based recon and I filled up input_ips.yml [y/n]"
+      private: false
+  gather_facts: false
+  tasks:
+    - name: Check if there actyaly an input file
+      ansible.builtin.stat:
+        path: input_ips.yml
+      register: input_file
+
+    - name: Exit play if no need
+      ansible.builtin.meta: end_play
+      when: input_filled != 'y' and input_file.stat.exists
+
+    - name: Load input
+      ansible.builtin.include_vars:
+        file: input_ips.yml
+        name: input_ips

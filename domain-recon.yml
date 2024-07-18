@@ -11,13 +11,13 @@
     - name: top_level_domain
       prompt: "Input TLD"
       private: false
-      # + ip addresses -> just add to list and reverse search after stage
-      # + networks -> asn?
+  vars:
+    INCLUDE_ACTIVE_RECON: false
   gather_facts: true
   tasks:
   - name: "Run bbot precheck"
     ansible.builtin.command:
-      cmd: "bbot --silent -t {{ top_level_domain }} -f subdomain-enum -rf passive -om json -n {{ top_level_domain }} -y -o ."
+      cmd: "bbot -em massdns --silent -t {{ top_level_domain }} -f subdomain-enum -rf passive -om json -n {{ top_level_domain }} -y -o ."
   
   - name: "Parse bbot subdomains"
     shell: cat {{ top_level_domain }}/output.ndjson | jq 'select((.type=="DNS_NAME") or (.type=="DNS_NAME_UNRESOLVED")) | .data' | tr -d '"' | sort | uniq > domains.txt
@@ -30,29 +30,14 @@
       executable: /bin/bash 
 
   - name: Dork Google for subdomains (100 first pages)
-    shell: go-dork -q "site:*.{{ top_level_domain }}" -p 100 -s| tee -i google-dorks-urls | unfurl domains | anew domains.txt
+    shell: go-dork -q "site:*.{{ top_level_domain }}" -p 100 -s| tee google-dorks-urls | unfurl domains | anew domains.txt
     args:
       executable: /bin/bash
 
   - name: Dork Github for subdomains
-    shell: github-subdomains -d deiteriy.com -t {{ keys.GITHUB_API_KEY }} -raw -q | anew domains.txt
+    shell: github-subdomains -t {{ keys.GITHUB_API_KEY }} -raw -q | anew domains.txt
     args:
       executable: /bin/bash
-
-  # This part should be covered by baddns
-  
-  # - name: Register NS servers as variable
-  #   shell: dig -t NS +noall +answer {{ top_level_domain }} | awk '{ print $5 }' | sed -e 's/\.$//'
-  #   args:
-  #     executable: /bin/bash
-  #   register: ns_servers
-
-  # - name: Trying AXFR
-  # # can cause problems in pipe bc i dont know how a succesful result looks like :)
-  #   shell: dig -t AXFR +noall +answer {{ top_level_domain }} @{{ item }} | grep -v -e "Transfer failed" | anew axfr
-  #   args:
-  #     executable: /bin/bash
-  #   loop: "{{ ns_servers.stdout_lines }}"
 
   - name: Searching archives and cache
     shell: gau {{ top_level_domain }} | tee -i archives-urls | unfurl domains | anew domains.txt
@@ -65,10 +50,13 @@
     ignore_errors: true
   
   - name: Brute subdomains
-    when: is_wildcard is failed
+    when: is_wildcard is failed and INCLUDE_ACTIVE_RECON
     shell: puredns bruteforce dns-wordlist.txt {{ top_level_domain }} --resolvers resolvers.txt -q | anew domains.txt
     args:
       executable: /bin/bash
+    
+  # - name: Permutate keywords
+  #   when: is_wildcard is failed and INCLUDE_ACTIVE_RECON
 
   - name: Dig into SPF records for domains
     shell: dig -t txt {{ top_level_domain }} | grep v=spf | python spf-parser.py | jq '.domains[]' | tr -d '"' | anew domains.txt
@@ -86,13 +74,14 @@
       executable: /bin/bash
 
   - name: Perform active steps for dangling records, AXFR, etc
+    when: INCLUDE_ACTIVE_RECON
     shell: "baddns -s -m NS,NSEC,CNAME,zonetransfer,MX {{ item }} > baddns.txt"
     args:
       executable: /bin/bash
     loop: "{{ lookup('file', 'domains-inscope.txt').splitlines() }}"
 
   - name: Resolve domains
-    shell: puredns resolve domains-inscope.txt -q > domains-resolved.txt
+    shell: puredns resolve domains-inscope.txt -q --write-wildcards wildcards.txt > domains-resolved.txt
     args:
       executable: /bin/bash
   
@@ -105,8 +94,20 @@
     shell: cat domains-resolved.txt | hakfindinternaldomains | awk '{print $1}' > domains-internal.txt
     args:
       executable: /bin/bash
+
+  - name: Unify external findings
+    shell: unify -m domains-resolved.txt > domains-unify.txt
+    args:
+      executable: /bin/bash
+
+  - name: Cut CDN
+    ansible.builtin.command:
+      cmd: cut-cdn -i domains-resolved.txt -t 5 -ua -q -o white-ip.txt
   
+  - name: Separate white IP domains and CDN hosted
+    shell: unify reverse -m white-ip.txt domains-unify.txt | tee white-domains.txt | combine domains-unify.txt not - > cdn-domains.txt
+    args:
+      executable: /bin/bash
+
   - name: Clear workdir
     include_tasks: clear_workdir.yml
-
-# external -> cdn/white
